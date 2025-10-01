@@ -21,13 +21,13 @@
 ### One-line installation:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh | sudo bash
 ```
 
 ### Or download and review first (recommended):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh -o install.sh
 chmod +x install.sh
 sudo ./install.sh
 ```

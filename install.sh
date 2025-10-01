@@ -5,12 +5,12 @@
 # Author: Victor Yoalli
 # Repository: https://github.com/victoryoalli/lemp-installer
 # Website: https://victoryoalli.me
-# 
+#
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh | sudo bash
 #
 # Or download and run:
-#   curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh -o install.sh
+#   curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh -o install.sh
 #   chmod +x install.sh
 #   sudo ./install.sh
 ###############################################################################
@@ -55,7 +55,7 @@ prompt_with_default() {
     local prompt="$1"
     local default="$2"
     local result
-    
+
     read -p "$prompt [$default]: " result
     echo "${result:-$default}"
 }
@@ -65,7 +65,7 @@ prompt_yes_no() {
     local prompt="$1"
     local default="$2"
     local result
-    
+
     if [ "$default" = "y" ]; then
         read -p "$prompt [Y/n]: " result
         result="${result:-y}"
@@ -73,14 +73,14 @@ prompt_yes_no() {
         read -p "$prompt [y/N]: " result
         result="${result:-n}"
     fi
-    
+
     [[ "$result" =~ ^[Yy]$ ]]
 }
 
 ###############################################################################
 # Check if running as root
 ###############################################################################
-if [ "$EUID" -ne 0 ]; then 
+if [ "$EUID" -ne 0 ]; then
     print_error "This script must be run as root (use sudo)"
     exit 1
 fi
@@ -97,7 +97,7 @@ if [ -f /etc/os-release ]; then
         fi
     fi
     print_info "Detected OS: $PRETTY_NAME"
-    
+
     # Check Ubuntu version
     VERSION_NUMBER=$(echo "$VERSION_ID" | cut -d. -f1)
     if [ "$VERSION_NUMBER" -lt 22 ]; then
@@ -319,7 +319,7 @@ if prompt_yes_no "Do you want to add an SSH public key for user '$SYSTEM_USER'?"
     echo ""
     print_info "Please paste your SSH public key (press Enter when done):"
     read -r SSH_PUBLIC_KEY
-    
+
     if [ -n "$SSH_PUBLIC_KEY" ]; then
         su - "$SYSTEM_USER" -c "echo '$SSH_PUBLIC_KEY' >> ~/.ssh/authorized_keys"
         print_success "SSH public key added!"
@@ -385,7 +385,7 @@ cat > "$NGINX_CONFIG" << EOF
 server {
     listen 80;
     listen [::]:80;
-    
+
     server_name ${DOMAIN_NAME:-localhost};
     root /home/$SYSTEM_USER/www/current/public;
 
@@ -464,7 +464,7 @@ fi
 if [ "$INSTALL_WORDPRESS" = true ]; then
     echo ""
     print_step "Step 6/8: Installing WordPress packages"
-    
+
     apt install -y \
         php-gd \
         php-curl \
@@ -473,7 +473,7 @@ if [ "$INSTALL_WORDPRESS" = true ]; then
         php-mbstring \
         php-zip \
         php-intl
-    
+
     systemctl restart php${PHP_VERSION}-fpm
     print_success "WordPress packages installed!"
 else
@@ -487,7 +487,7 @@ fi
 if [ "$INSTALL_SSL" = true ]; then
     echo ""
     print_step "Step 7/8: Setting up SSL with Let's Encrypt"
-    
+
     # Install snapd if not present
     if ! command -v snap &> /dev/null; then
         print_info "Installing snapd..."
@@ -496,21 +496,21 @@ if [ "$INSTALL_SSL" = true ]; then
         systemctl enable snapd
         sleep 5
     fi
-    
+
     # Install certbot
     print_info "Installing Certbot..."
     snap install core 2>/dev/null || snap refresh core
     snap install --classic certbot
     ln -sf /snap/bin/certbot /usr/bin/certbot
-    
+
     print_info "Obtaining SSL certificate for $DOMAIN_NAME..."
     print_warning "Make sure your domain is pointing to this server's IP address!"
     echo ""
-    
+
     if prompt_yes_no "Proceed with SSL certificate request?" "y"; then
         if certbot --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect 2>&1 | tee -a "$LOG_FILE"; then
             print_success "SSL certificate installed and configured!"
-            
+
             # Setup auto-renewal
             systemctl enable snap.certbot.renew.timer 2>/dev/null || true
             print_success "SSL auto-renewal configured!"
@@ -532,14 +532,14 @@ fi
 if [ "$SETUP_FIREWALL" = true ]; then
     echo ""
     print_step "Step 8/8: Configuring UFW firewall"
-    
+
     apt install -y ufw
-    
+
     print_info "Configuring firewall rules..."
     # Allow SSH first (important!)
     ufw allow OpenSSH
     ufw allow 'Nginx Full'
-    
+
     # Enable firewall
     print_warning "Enabling firewall. Make sure you have SSH access configured!"
     if prompt_yes_no "Enable firewall now?" "y"; then

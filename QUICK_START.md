@@ -94,7 +94,7 @@ First stable release of LEMP Stack Installer for Laravel on Ubuntu 24.04.
 ### 📦 Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh | sudo bash
 ```
 
 ### 📚 Full Documentation
@@ -115,21 +115,21 @@ Agrega este código HTML a https://victoryoalli.me/ubuntu-lemp-install:
     <h2 style="color: white; margin-top: 0; font-size: 28px; font-weight: bold;">
         🚀 Instalación Automática LEMP Stack
     </h2>
-    
+
     <p style="font-size: 16px; opacity: 0.95; margin-bottom: 25px;">
         ¿No quieres seguir todos los pasos manualmente? Usa nuestro script automatizado que instala todo en 5-10 minutos:
     </p>
-    
+
     <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 20px; margin: 20px 0; font-family: 'Courier New', monospace; position: relative;">
         <code style="color: #4ade80; font-size: 14px; display: block; word-wrap: break-word;">
-            curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh | sudo bash
+            curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh | sudo bash
         </code>
-        <button onclick="copyToClipboard('curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh | sudo bash')" 
+        <button onclick="copyToClipboard('curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh | sudo bash')"
                 style="position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.3s;">
             📋 Copiar
         </button>
     </div>
-    
+
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 25px 0;">
         <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
             <div style="font-size: 24px; margin-bottom: 8px;">⚡</div>
@@ -152,7 +152,7 @@ Agrega este código HTML a https://victoryoalli.me/ubuntu-lemp-install:
             <div style="font-size: 13px; opacity: 0.9;">MIT License</div>
         </div>
     </div>
-    
+
     <details style="margin-top: 20px; background: rgba(0,0,0,0.2); padding: 20px; border-radius: 8px; cursor: pointer;">
         <summary style="font-weight: bold; font-size: 16px; outline: none; cursor: pointer;">
             📚 ¿Prefieres revisar el código primero?
@@ -164,7 +164,7 @@ Agrega este código HTML a https://victoryoalli.me/ubuntu-lemp-install:
                     # Ver el código en GitHub<br>
                     # https://github.com/victoryoalli/lemp-installer<br><br>
                     # Descargar y revisar<br>
-                    curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh -o install.sh<br>
+                    curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh -o install.sh<br>
                     less install.sh<br><br>
                     # Ejecutar<br>
                     chmod +x install.sh<br>
@@ -173,9 +173,9 @@ Agrega este código HTML a https://victoryoalli.me/ubuntu-lemp-install:
             </div>
         </div>
     </details>
-    
+
     <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.2);">
-        <a href="https://github.com/victoryoalli/lemp-installer" target="_blank" 
+        <a href="https://github.com/victoryoalli/lemp-installer" target="_blank"
            style="display: inline-block; background: rgba(255,255,255,0.2); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; transition: all 0.3s; border: 2px solid rgba(255,255,255,0.3);">
             ⭐ Ver en GitHub
         </a>
@@ -212,7 +212,7 @@ details[open] summary {
 En un servidor de prueba (VM, DigitalOcean, AWS, etc.):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh | sudo bash
 ```
 
 ---
@@ -236,7 +236,7 @@ curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/in
 ### Tweet de ejemplo:
 
 ```
-🚀 Acabo de publicar LEMP Installer - un script open source para instalar 
+🚀 Acabo de publicar LEMP Installer - un script open source para instalar
 Nginx + MySQL + PHP 8.3 optimizado para Laravel en Ubuntu 24.04
 
 ✅ Instalación en 1 línea
@@ -244,7 +244,7 @@ Nginx + MySQL + PHP 8.3 optimizado para Laravel en Ubuntu 24.04
 ✅ Interactivo con valores por defecto
 ✅ 100% open source (MIT)
 
-curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh | sudo bash
 
 ⭐ https://github.com/victoryoalli/lemp-installer
 
@@ -257,7 +257,7 @@ curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/in
 
 - **Repositorio:** https://github.com/victoryoalli/lemp-installer
 - **Blog Post:** https://victoryoalli.me/ubuntu-lemp-install
-- **Script directo:** https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh
+- **Script directo:** https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh
 - **Issues:** https://github.com/victoryoalli/lemp-installer/issues
 - **Releases:** https://github.com/victoryoalli/lemp-installer/releases
 
@@ -266,13 +266,13 @@ curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/in
 ## 📋 Comando Final de Instalación
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh | sudo bash
 ```
 
 O descarga y revisa primero:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh -o install.sh
 less install.sh
 chmod +x install.sh
 sudo ./install.sh
