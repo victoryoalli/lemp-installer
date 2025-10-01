@@ -1,0 +1,46 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Log files
+*.log
+
+# Backup files
+*.bak
+*.backup
+
+# Test files
+test/
+testing/
+*.test
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Environment files (if added later)
+.env
+.env.local
+.env.*.local
+
+# Node modules (if added later)
+node_modules/
+
+# Build files (if added later)
+dist/
+build/
