@@ -120,7 +120,7 @@ echo "╚═══════════════════════�
 echo ""
 print_info "This script will install and configure:"
 echo "  - Nginx (latest)"
-echo "  - MySQL 8.0+"
+echo "  - Database (MySQL 8.0+ or PostgreSQL 15+)"
 echo "  - PHP 8.3 with Laravel extensions"
 echo "  - Composer (latest)"
 echo "  - Certbot for SSL (optional)"
@@ -142,22 +142,58 @@ echo ""
 print_step "Configuration parameters"
 echo ""
 
-# MySQL configuration
-MYSQL_USER=$(prompt_with_default "MySQL username for web applications" "web")
-MYSQL_PASSWORD=""
-while [ -z "$MYSQL_PASSWORD" ]; do
-    read -sp "MySQL password for user '$MYSQL_USER': " MYSQL_PASSWORD
-    echo ""
-    if [ -z "$MYSQL_PASSWORD" ]; then
-        print_warning "Password cannot be empty. Please try again."
-    fi
+# Database selection
+echo "Select your database:"
+echo "  1) MySQL 8.0+"
+echo "  2) PostgreSQL 15+"
+DB_CHOICE=""
+while [[ ! "$DB_CHOICE" =~ ^[12]$ ]]; do
+    read -p "Enter your choice (1-2): " DB_CHOICE
+    case $DB_CHOICE in
+        1)
+            DATABASE_TYPE="mysql"
+            DATABASE_NAME="MySQL"
+            print_info "Selected: MySQL 8.0+"
+            ;;
+        2)
+            DATABASE_TYPE="postgresql"
+            DATABASE_NAME="PostgreSQL"
+            print_info "Selected: PostgreSQL 15+"
+            ;;
+        *)
+            print_warning "Invalid choice. Please enter 1 for MySQL or 2 for PostgreSQL."
+            ;;
+    esac
 done
 
+# Database configuration
+if [ "$DATABASE_TYPE" = "mysql" ]; then
+    DB_USER=$(prompt_with_default "MySQL username for web applications" "web")
+    DB_PASSWORD=""
+    while [ -z "$DB_PASSWORD" ]; do
+        read -sp "MySQL password for user '$DB_USER': " DB_PASSWORD
+        echo ""
+        if [ -z "$DB_PASSWORD" ]; then
+            print_warning "Password cannot be empty. Please try again."
+        fi
+    done
+else
+    DB_USER=$(prompt_with_default "PostgreSQL username for web applications" "web")
+    DB_PASSWORD=""
+    while [ -z "$DB_PASSWORD" ]; do
+        read -sp "PostgreSQL password for user '$DB_USER': " DB_PASSWORD
+        echo ""
+        if [ -z "$DB_PASSWORD" ]; then
+            print_warning "Password cannot be empty. Please try again."
+        fi
+    done
+fi
+
 # Confirm password
-MYSQL_PASSWORD_CONFIRM=""
-read -sp "Confirm MySQL password: " MYSQL_PASSWORD_CONFIRM
+DB_PASSWORD_CONFIRM=""
+read -sp "Confirm $DATABASE_NAME password: " DB_PASSWORD_CONFIRM
 echo ""
-if [ "$MYSQL_PASSWORD" != "$MYSQL_PASSWORD_CONFIRM" ]; then
+if [ "$DB_PASSWORD" != "$DB_PASSWORD_CONFIRM" ]; then
     print_error "Passwords do not match!"
     exit 1
 fi
@@ -206,7 +242,8 @@ fi
 echo ""
 print_step "Configuration summary"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "MySQL User:           $MYSQL_USER"
+echo "Database:             $DATABASE_NAME"
+echo "Database User:        $DB_USER"
 echo "System User:          $SYSTEM_USER"
 echo "Site Name:            $SITE_NAME"
 echo "Domain:               ${DOMAIN_NAME:-Not configured}"
@@ -245,51 +282,96 @@ apt update
 print_info "Upgrading installed packages..."
 apt upgrade -y
 
-print_info "Installing core packages (Nginx, MySQL, PHP)..."
-apt install -y nginx mysql-server php-fpm php-mysql acl zip curl wget git unzip
+# Install database packages based on selection
+if [ "$DATABASE_TYPE" = "mysql" ]; then
+    print_info "Installing core packages (Nginx, MySQL, PHP)..."
+    apt install -y nginx mysql-server php-fpm php-mysql acl zip curl wget git unzip
+else
+    print_info "Installing core packages (Nginx, PostgreSQL, PHP)..."
+    apt install -y nginx postgresql postgresql-contrib php-fpm php-pgsql acl zip curl wget git unzip
+fi
 
 print_info "Installing PHP extensions for Laravel..."
-apt install -y \
-    php-fpm \
-    php-cli \
-    php-common \
-    php-mysql \
-    php-zip \
-    php-gd \
-    php-mbstring \
-    php-curl \
-    php-xml \
-    php-bcmath \
-    openssl \
-    php-tokenizer \
-    php-json \
-    php-intl
+if [ "$DATABASE_TYPE" = "mysql" ]; then
+    apt install -y \
+        php-fpm \
+        php-cli \
+        php-common \
+        php-mysql \
+        php-zip \
+        php-gd \
+        php-mbstring \
+        php-curl \
+        php-xml \
+        php-bcmath \
+        openssl \
+        php-tokenizer \
+        php-json \
+        php-intl
+else
+    apt install -y \
+        php-fpm \
+        php-cli \
+        php-common \
+        php-pgsql \
+        php-zip \
+        php-gd \
+        php-mbstring \
+        php-curl \
+        php-xml \
+        php-bcmath \
+        openssl \
+        php-tokenizer \
+        php-json \
+        php-intl
+fi
 
 print_success "All packages installed successfully!"
 
 ###############################################################################
-# Step 2: Configure MySQL
+# Step 2: Configure Database
 ###############################################################################
 echo ""
-print_step "Step 2/8: Configuring MySQL"
+print_step "Step 2/8: Configuring $DATABASE_NAME"
 
-# Start MySQL if not running
-print_info "Starting MySQL service..."
-systemctl start mysql
-systemctl enable mysql
+if [ "$DATABASE_TYPE" = "mysql" ]; then
+    # Start MySQL if not running
+    print_info "Starting MySQL service..."
+    systemctl start mysql
+    systemctl enable mysql
 
-# Create MySQL user and grant privileges
-print_info "Creating MySQL user '$MYSQL_USER'..."
-mysql -e "CREATE USER IF NOT EXISTS '$MYSQL_USER'@'localhost' IDENTIFIED BY '$MYSQL_PASSWORD';" 2>/dev/null || true
-mysql -e "GRANT ALL PRIVILEGES ON *.* TO '$MYSQL_USER'@'localhost' WITH GRANT OPTION;"
-mysql -e "FLUSH PRIVILEGES;"
+    # Create MySQL user and grant privileges
+    print_info "Creating MySQL user '$DB_USER'..."
+    mysql -e "CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASSWORD';" 2>/dev/null || true
+    mysql -e "GRANT ALL PRIVILEGES ON *.* TO '$DB_USER'@'localhost' WITH GRANT OPTION;"
+    mysql -e "FLUSH PRIVILEGES;"
 
-# Test MySQL connection
-if mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SELECT 1;" >/dev/null 2>&1; then
-    print_success "MySQL user '$MYSQL_USER' created and configured successfully!"
+    # Test MySQL connection
+    if mysql -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1;" >/dev/null 2>&1; then
+        print_success "MySQL user '$DB_USER' created and configured successfully!"
+    else
+        print_error "Failed to create or configure MySQL user"
+        exit 1
+    fi
 else
-    print_error "Failed to create or configure MySQL user"
-    exit 1
+    # Start PostgreSQL if not running
+    print_info "Starting PostgreSQL service..."
+    systemctl start postgresql
+    systemctl enable postgresql
+
+    # Switch to postgres user to create database user
+    print_info "Creating PostgreSQL user '$DB_USER'..."
+    sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
+    sudo -u postgres psql -c "ALTER USER $DB_USER CREATEDB;" 2>/dev/null || true
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE postgres TO $DB_USER;" 2>/dev/null || true
+
+    # Test PostgreSQL connection
+    if sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1; then
+        print_success "PostgreSQL user '$DB_USER' created and configured successfully!"
+    else
+        print_error "Failed to create or configure PostgreSQL user"
+        exit 1
+    fi
 fi
 
 ###############################################################################
@@ -570,7 +652,8 @@ echo "Web root:             /home/$SYSTEM_USER/www/current/public"
 echo "Nginx config:         /etc/nginx/sites-available/$SITE_NAME"
 echo "PHP version:          $PHP_VERSION"
 echo "PHP socket:           $PHP_SOCKET"
-echo "MySQL user:           $MYSQL_USER"
+echo "Database:             $DATABASE_NAME"
+echo "Database user:        $DB_USER"
 echo "System user:          $SYSTEM_USER"
 echo "Log file:             $LOG_FILE"
 if [ -n "$DOMAIN_NAME" ]; then
@@ -621,13 +704,18 @@ else
 fi
 echo ""
 print_warning "IMPORTANT: Save these credentials securely!"
-echo "  MySQL User: $MYSQL_USER"
-echo "  MySQL Password: [hidden]"
+echo "  Database: $DATABASE_NAME"
+echo "  Database User: $DB_USER"
+echo "  Database Password: [hidden]"
 echo ""
 print_info "Useful commands:"
 echo "  sudo systemctl status nginx          # Check Nginx"
 echo "  sudo systemctl status php${PHP_VERSION}-fpm   # Check PHP-FPM"
-echo "  sudo systemctl status mysql          # Check MySQL"
+if [ "$DATABASE_TYPE" = "mysql" ]; then
+    echo "  sudo systemctl status mysql          # Check MySQL"
+else
+    echo "  sudo systemctl status postgresql     # Check PostgreSQL"
+fi
 echo "  sudo tail -f /var/log/nginx/error.log   # View Nginx logs"
 echo ""
 print_success "Installation complete! 🚀"
