@@ -16,12 +16,19 @@
 #
 # Apply SSL Nginx config after obtaining a certificate:
 #   sudo ./install.sh --apply-ssl
+#
+# Re-apply PHP settings (e.g. after a PHP version upgrade):
+#   sudo ./install.sh --reconfigure-php
+#   sudo ./install.sh --reconfigure-php 8.4
+#
+# Show this help:
+#   sudo ./install.sh -h
 ###############################################################################
 
 set -e  # Exit on error
 
 # Script version
-VERSION="1.0.0"
+VERSION="1.4.0"
 
 # Colors for output
 RED='\033[0;31m'
@@ -91,6 +98,27 @@ fi
 ###############################################################################
 # Argument parsing
 ###############################################################################
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+    cat <<EOF
+LEMP Stack Installer v${VERSION}
+Usage: sudo ./install.sh [OPTION]
+
+Options:
+  (no option)               Full interactive install (Nginx, PHP, DB, Composer)
+  --apply-ssl               Write SSL Nginx config after certbot issues a certificate
+  --reconfigure-php [VER]   Re-write Laravel PHP drop-in config for an installed PHP
+                            version; auto-detects active version if VER is omitted
+  -h, --help                Show this help message
+
+Examples:
+  sudo ./install.sh
+  sudo ./install.sh --apply-ssl
+  sudo ./install.sh --reconfigure-php
+  sudo ./install.sh --reconfigure-php 8.4
+EOF
+    exit 0
+fi
+
 APPLY_SSL_MODE=false
 if [ "${1:-}" = "--apply-ssl" ]; then
     APPLY_SSL_MODE=true
