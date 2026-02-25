@@ -19,6 +19,7 @@ One file: `install.sh`. All logic lives there — no modules, no subcommands (ex
 - Default: full interactive install
 - `--apply-ssl`: writes SSL Nginx config post-certbot; prompts for domain + site name only
 - `--reconfigure-php [version]`: writes PHP drop-in config for an installed PHP version; auto-detects if no version given
+- `-h` / `--help`: prints usage and exits
 
 ## Testing
 

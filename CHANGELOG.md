@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Laravel-optimized PHP drop-in config written to `/etc/php/<version>/fpm/conf.d/99-laravel.ini` on every full install (`memory_limit=256M`, `upload_max_filesize=64M`, `post_max_size=64M`, `max_execution_time=60`, `date.timezone=UTC`, OPcache enabled)
 - WordPress installs now also write `/etc/php/<version>/fpm/conf.d/99-wordpress.ini` (`upload_max_filesize=128M`, `post_max_size=128M`, `max_input_vars=3000`)
 - `--reconfigure-php [version]` mode — re-applies PHP drop-in settings for an installed PHP version without running the full installer; auto-detects the active version when no argument is given; carries over WordPress settings if present
+- `-h` / `--help` flag — prints usage, all available modes with examples, and exits cleanly
 
 ## [Unreleased]
 

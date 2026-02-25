@@ -348,6 +348,16 @@ The script will ask for your domain and site name, then write the full SSL Nginx
 
 ---
 
+### Getting help
+
+```bash
+sudo ./install.sh -h
+```
+
+Prints all available modes and usage examples.
+
+---
+
 ### ⚙️ Reconfiguring PHP settings
 
 After a full install, or after upgrading to a new PHP version, you can re-apply the Laravel-optimized PHP settings without running the full installer:
