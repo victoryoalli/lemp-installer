@@ -136,6 +136,37 @@ if ! prompt_yes_no "Do you want to continue?" "y"; then
 fi
 
 ###############################################################################
+# Input validation functions
+###############################################################################
+
+validate_unix_name() {
+    local val="$1" label="$2"
+    if ! [[ "$val" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+        print_error "$label must start with a letter or underscore, contain only a-z, 0-9, _ or -, and be at most 32 characters."
+        return 1
+    fi
+    return 0
+}
+
+validate_site_name() {
+    local val="$1"
+    if ! [[ "$val" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        print_error "Site name must contain only letters, numbers, underscores, or hyphens."
+        return 1
+    fi
+    return 0
+}
+
+validate_domain() {
+    local val="$1"
+    if [[ -n "$val" ]] && ! [[ "$val" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$ ]]; then
+        print_error "Invalid domain name format."
+        return 1
+    fi
+    return 0
+}
+
+###############################################################################
 # Collect configuration parameters
 ###############################################################################
 echo ""
@@ -168,7 +199,11 @@ done
 
 # Database configuration
 if [ "$DATABASE_TYPE" = "mysql" ]; then
-    DB_USER=$(prompt_with_default "MySQL username for web applications" "web")
+    DB_USER=""
+    while true; do
+        DB_USER=$(prompt_with_default "MySQL username for web applications" "web")
+        validate_unix_name "$DB_USER" "MySQL username" && break
+    done
     DB_PASSWORD=""
     while [ -z "$DB_PASSWORD" ]; do
         read -sp "MySQL password for user '$DB_USER': " DB_PASSWORD
@@ -178,7 +213,11 @@ if [ "$DATABASE_TYPE" = "mysql" ]; then
         fi
     done
 else
-    DB_USER=$(prompt_with_default "PostgreSQL username for web applications" "web")
+    DB_USER=""
+    while true; do
+        DB_USER=$(prompt_with_default "PostgreSQL username for web applications" "web")
+        validate_unix_name "$DB_USER" "PostgreSQL username" && break
+    done
     DB_PASSWORD=""
     while [ -z "$DB_PASSWORD" ]; do
         read -sp "PostgreSQL password for user '$DB_USER': " DB_PASSWORD
@@ -199,11 +238,23 @@ if [ "$DB_PASSWORD" != "$DB_PASSWORD_CONFIRM" ]; then
 fi
 
 # System user configuration
-SYSTEM_USER=$(prompt_with_default "System username for web applications" "web")
+SYSTEM_USER=""
+while true; do
+    SYSTEM_USER=$(prompt_with_default "System username for web applications" "web")
+    validate_unix_name "$SYSTEM_USER" "System username" && break
+done
 
 # Site configuration
-SITE_NAME=$(prompt_with_default "Site name (used for nginx config filename)" "mysite")
-DOMAIN_NAME=$(prompt_with_default "Domain name (e.g., example.com)" "")
+SITE_NAME=""
+while true; do
+    SITE_NAME=$(prompt_with_default "Site name (used for nginx config filename)" "mysite")
+    validate_site_name "$SITE_NAME" && break
+done
+DOMAIN_NAME=""
+while true; do
+    DOMAIN_NAME=$(prompt_with_default "Domain name (e.g., example.com)" "")
+    validate_domain "$DOMAIN_NAME" && break
+done
 
 # PHP version
 PHP_VERSION="8.3"
@@ -262,6 +313,8 @@ fi
 
 # Log file
 LOG_FILE="/var/log/lemp-install-$(date +%Y%m%d-%H%M%S).log"
+touch "$LOG_FILE"
+chmod 600 "$LOG_FILE"
 print_info "Installation log will be saved to: $LOG_FILE"
 
 # Redirect output to log file while still showing on screen
@@ -346,10 +399,15 @@ if [ "$DATABASE_TYPE" = "mysql" ]; then
     mysql -e "GRANT ALL PRIVILEGES ON *.* TO '$DB_USER'@'localhost' WITH GRANT OPTION;"
     mysql -e "FLUSH PRIVILEGES;"
 
-    # Test MySQL connection
-    if mysql -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1;" >/dev/null 2>&1; then
+    # Test MySQL connection using a temp config file to avoid password in process list
+    MYSQL_TEST_CNF=$(mktemp)
+    chmod 600 "$MYSQL_TEST_CNF"
+    printf '[client]\nuser=%s\npassword=%s\n' "$DB_USER" "$DB_PASSWORD" > "$MYSQL_TEST_CNF"
+    if mysql --defaults-extra-file="$MYSQL_TEST_CNF" -e "SELECT 1;" >/dev/null 2>&1; then
+        rm -f "$MYSQL_TEST_CNF"
         print_success "MySQL user '$DB_USER' created and configured successfully!"
     else
+        rm -f "$MYSQL_TEST_CNF"
         print_error "Failed to create or configure MySQL user"
         exit 1
     fi
@@ -361,15 +419,15 @@ else
 
     # Switch to postgres user to create database user
     print_info "Creating PostgreSQL user '$DB_USER'..."
-    sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
-    sudo -u postgres psql -c "ALTER USER $DB_USER CREATEDB;" 2>/dev/null || true
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE postgres TO $DB_USER;" 2>/dev/null || true
+    sudo -u postgres psql -c "CREATE USER \"${DB_USER}\" WITH PASSWORD '${DB_PASSWORD}';" 2>/dev/null || true
+    sudo -u postgres psql -c "ALTER USER \"${DB_USER}\" CREATEDB;" 2>/dev/null || true
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE postgres TO \"${DB_USER}\";" 2>/dev/null || true
 
-    # Test PostgreSQL connection
-    if sudo -u postgres psql -c "SELECT 1;" >/dev/null 2>&1; then
-        print_success "PostgreSQL user '$DB_USER' created and configured successfully!"
+    # Test PostgreSQL connection as the created user (not as postgres superuser)
+    if PGPASSWORD="$DB_PASSWORD" psql -h localhost -U "$DB_USER" -d postgres -c "SELECT 1;" >/dev/null 2>&1; then
+        print_success "PostgreSQL user '$DB_USER' created and verified!"
     else
-        print_error "Failed to create or configure PostgreSQL user"
+        print_error "Failed to connect as PostgreSQL user '$DB_USER'"
         exit 1
     fi
 fi
@@ -403,7 +461,7 @@ if prompt_yes_no "Do you want to add an SSH public key for user '$SYSTEM_USER'?"
     read -r SSH_PUBLIC_KEY
 
     if [ -n "$SSH_PUBLIC_KEY" ]; then
-        su - "$SYSTEM_USER" -c "echo '$SSH_PUBLIC_KEY' >> ~/.ssh/authorized_keys"
+        echo "$SSH_PUBLIC_KEY" | su - "$SYSTEM_USER" -c "cat >> ~/.ssh/authorized_keys"
         print_success "SSH public key added!"
     fi
 fi

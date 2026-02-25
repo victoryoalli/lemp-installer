@@ -5,6 +5,7 @@
 ![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
 ![Nginx](https://img.shields.io/badge/nginx-%23009639.svg?style=for-the-badge&logo=nginx&logoColor=white)
 ![MySQL](https://img.shields.io/badge/mysql-%2300f.svg?style=for-the-badge&logo=mysql&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/postgresql-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
 ![PHP](https://img.shields.io/badge/php-8.3-%23777BB4.svg?style=for-the-badge&logo=php&logoColor=white)
 ![Laravel](https://img.shields.io/badge/laravel-%23FF2D20.svg?style=for-the-badge&logo=laravel&logoColor=white)
 
@@ -37,14 +38,16 @@ sudo ./install.sh
 ## ✨ Features
 
 - 🎯 **Interactive installation** with sensible defaults
+- 🗄️ **Database choice**: MySQL 8.0+ or PostgreSQL 15+
 - 🔒 **SSL/TLS** configuration with Let's Encrypt
 - 👤 **System user** setup for deployments
 - 🔑 **SSH keys** generation for GitHub/GitLab integration
 - 🛡️ **UFW firewall** configuration (optional)
 - 📦 **Composer** installed automatically
 - 🌐 **WordPress support** (optional)
-- 📝 **Detailed logging** of installation process
+- 📝 **Secure logging** — log file is restricted to root (mode 600)
 - ✅ **Automatic validation** and health checks
+- 🔐 **Input validation** — usernames, site names, and domain names are validated before use
 
 ---
 
@@ -53,7 +56,8 @@ sudo ./install.sh
 | Component | Version | Description |
 |-----------|---------|-------------|
 | **Nginx** | Latest | High-performance web server |
-| **MySQL** | 8.0+ | Database management system |
+| **MySQL** | 8.0+ | Relational database (choose one) |
+| **PostgreSQL** | 15+ | Relational database (choose one) |
 | **PHP** | 8.3 | PHP-FPM with essential extensions |
 | **Composer** | Latest | PHP dependency manager |
 | **Certbot** | Latest | SSL certificate automation |
@@ -62,7 +66,7 @@ sudo ./install.sh
 ### PHP Extensions Included:
 
 - php-fpm, php-cli, php-common
-- php-mysql, php-zip, php-gd
+- php-mysql (MySQL) or php-pgsql (PostgreSQL), php-zip, php-gd
 - php-mbstring, php-curl, php-xml
 - php-bcmath, php-tokenizer, openssl
 
@@ -86,18 +90,21 @@ sudo ./install.sh
 
 The script will prompt you for:
 
-1. **MySQL Configuration**
-   - Username (default: `web`)
+1. **Database Selection**
+   - Choose MySQL 8.0+ or PostgreSQL 15+
+
+2. **Database Configuration**
+   - Username (validated: lowercase letters, numbers, `_` or `-`, max 32 chars)
    - Password (required, with confirmation)
 
-2. **System User**
-   - Username (default: `web`)
+3. **System User**
+   - Username (same validation rules as database username)
 
-3. **Site Configuration**
-   - Site name (default: `mysite`)
-   - Domain name (optional)
+4. **Site Configuration**
+   - Site name (letters, numbers, `_` or `-`)
+   - Domain name (optional, validated format)
 
-4. **Optional Features**
+5. **Optional Features**
    - WordPress packages
    - SSL with Let's Encrypt
    - SSH key generation
@@ -144,6 +151,7 @@ Visit `http://your-domain.com` or `http://your-server-ip` in your browser.
 
 ### 3. Create Database
 
+**MySQL:**
 ```bash
 mysql -u web -p
 ```
@@ -152,6 +160,17 @@ mysql -u web -p
 CREATE DATABASE my_app;
 SHOW DATABASES;
 EXIT;
+```
+
+**PostgreSQL:**
+```bash
+psql -h localhost -U web -d postgres
+```
+
+```sql
+CREATE DATABASE my_app;
+\l
+\q
 ```
 
 ---
@@ -182,6 +201,7 @@ nano .env
 
 Edit `.env` file:
 
+**MySQL:**
 ```env
 APP_ENV=production
 APP_DEBUG=false
@@ -189,9 +209,24 @@ APP_URL=https://your-domain.com
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
+DB_PORT=3306
 DB_DATABASE=my_app
 DB_USERNAME=web
-DB_PASSWORD=your_mysql_password
+DB_PASSWORD=your_password
+```
+
+**PostgreSQL:**
+```env
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://your-domain.com
+
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=my_app
+DB_USERNAME=web
+DB_PASSWORD=your_password
 ```
 
 ### Step 4: Run Laravel Commands
@@ -234,9 +269,19 @@ sudo systemctl status php8.3-fpm       # Check status
 ### MySQL
 
 ```bash
-mysql -u web -p                        # Login to MySQL
-mysqldump -u web -p db > backup.sql    # Backup database
-mysql -u web -p db < backup.sql        # Restore database
+mysql -u web -p                                # Login to MySQL
+mysqldump -u web -p db > backup.sql            # Backup database
+mysql -u web -p db < backup.sql                # Restore database
+sudo systemctl status mysql                    # Check MySQL status
+```
+
+### PostgreSQL
+
+```bash
+psql -h localhost -U web -d postgres           # Login to PostgreSQL
+pg_dump -h localhost -U web db > backup.sql    # Backup database
+psql -h localhost -U web db < backup.sql       # Restore database
+sudo systemctl status postgresql               # Check PostgreSQL status
 ```
 
 ### SSL (Certbot)
@@ -284,7 +329,20 @@ FLUSH PRIVILEGES;
 
 ---
 
-## 🔒 Security Best Practices
+## 🔒 Security
+
+### Script Security Hardening
+
+The installer includes several security measures:
+
+- **Log file protection** — the install log is created with mode `600` (root-readable only) before any output is written to it
+- **Input validation** — usernames, site names, and domain names are validated against strict patterns to prevent shell injection and SQL injection
+- **MySQL password safety** — the connection test uses a temporary `.my.cnf` config file rather than passing the password on the command line, preventing it from appearing in `ps aux` output
+- **PostgreSQL identifier quoting** — the database username is double-quoted in SQL (`"username"`) to prevent SQL injection via a crafted username
+- **PostgreSQL connection verification** — the post-creation test connects as the newly created user (not as the `postgres` superuser) to confirm the user was actually created correctly
+- **SSH key safety** — the public key is piped via stdin rather than embedded in a shell string, preventing injection via keys containing single quotes
+
+### Post-Installation Best Practices
 
 ### 1. Change SSH Port
 
