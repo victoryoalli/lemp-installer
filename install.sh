@@ -267,11 +267,29 @@ if prompt_yes_no "Install WordPress packages?" "n"; then
 fi
 
 INSTALL_SSL=false
+SSL_TYPE="standard"
 SSL_EMAIL=""
 if [ -n "$DOMAIN_NAME" ]; then
     if prompt_yes_no "Install and configure SSL with Let's Encrypt?" "y"; then
         INSTALL_SSL=true
         SSL_EMAIL=$(prompt_with_default "Email for SSL certificate" "admin@$DOMAIN_NAME")
+
+        echo ""
+        echo "Select SSL certificate type:"
+        echo "  1) Standard  — single domain (HTTP challenge, fully automated)"
+        echo "  2) Wildcard  — *.${DOMAIN_NAME} (DNS challenge, requires manual DNS record)"
+        SSL_CHOICE=""
+        while [[ ! "$SSL_CHOICE" =~ ^[12]$ ]]; do
+            read -p "Enter your choice (1-2): " SSL_CHOICE
+        done
+        if [ "$SSL_CHOICE" = "2" ]; then
+            SSL_TYPE="wildcard"
+            print_info "Selected: Wildcard certificate (*.${DOMAIN_NAME} + ${DOMAIN_NAME})"
+            print_warning "You will need to add a TXT DNS record during the certificate request."
+        else
+            SSL_TYPE="standard"
+            print_info "Selected: Standard certificate (${DOMAIN_NAME})"
+        fi
     fi
 fi
 
@@ -300,7 +318,7 @@ echo "Site Name:            $SITE_NAME"
 echo "Domain:               ${DOMAIN_NAME:-Not configured}"
 echo "PHP Version:          $PHP_VERSION"
 echo "Install WordPress:    $INSTALL_WORDPRESS"
-echo "Install SSL:          $INSTALL_SSL"
+echo "Install SSL:          $INSTALL_SSL${INSTALL_SSL:+ ($SSL_TYPE)}"
 echo "Setup SSH Keys:       $SETUP_SSH_KEYS"
 echo "Setup Firewall:       $SETUP_FIREWALL"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -521,12 +539,18 @@ fi
 print_info "Creating Nginx configuration..."
 NGINX_CONFIG="/etc/nginx/sites-available/$SITE_NAME"
 
+if [ "$SSL_TYPE" = "wildcard" ] && [ -n "$DOMAIN_NAME" ]; then
+    NGINX_SERVER_NAME="${DOMAIN_NAME} *.${DOMAIN_NAME}"
+else
+    NGINX_SERVER_NAME="${DOMAIN_NAME:-localhost}"
+fi
+
 cat > "$NGINX_CONFIG" << EOF
 server {
     listen 80;
     listen [::]:80;
 
-    server_name ${DOMAIN_NAME:-localhost};
+    server_name ${NGINX_SERVER_NAME};
     root /home/$SYSTEM_USER/www/current/public;
 
     add_header X-Frame-Options "SAMEORIGIN";
@@ -647,19 +671,96 @@ if [ "$INSTALL_SSL" = true ]; then
     print_warning "Make sure your domain is pointing to this server's IP address!"
     echo ""
 
-    if prompt_yes_no "Proceed with SSL certificate request?" "y"; then
-        if certbot --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect 2>&1 | tee -a "$LOG_FILE"; then
-            print_success "SSL certificate installed and configured!"
+    if [ "$SSL_TYPE" = "wildcard" ]; then
+        print_info "Requesting wildcard certificate for *.${DOMAIN_NAME} and ${DOMAIN_NAME}..."
+        print_warning "Certbot will pause and ask you to create a DNS TXT record."
+        print_warning "Log in to your DNS provider and add the record before pressing Enter."
+        echo ""
 
-            # Setup auto-renewal
-            systemctl enable snap.certbot.renew.timer 2>/dev/null || true
-            print_success "SSL auto-renewal configured!"
+        if certbot certonly --manual --preferred-challenges dns \
+            -d "*.${DOMAIN_NAME}" -d "${DOMAIN_NAME}" \
+            --agree-tos --email "$SSL_EMAIL" \
+            --manual-public-ip-logging-ok 2>&1 | tee -a "$LOG_FILE"; then
+
+            print_success "Wildcard certificate obtained!"
+
+            NGINX_CONFIG="/etc/nginx/sites-available/$SITE_NAME"
+            CERT_PATH="/etc/letsencrypt/live/${DOMAIN_NAME}"
+
+            cat > "$NGINX_CONFIG" << NGINXEOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN_NAME} *.${DOMAIN_NAME};
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+
+    server_name ${DOMAIN_NAME} *.${DOMAIN_NAME};
+    root /home/$SYSTEM_USER/www/current/public;
+
+    ssl_certificate ${CERT_PATH}/fullchain.pem;
+    ssl_certificate_key ${CERT_PATH}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+
+    index index.html index.php;
+    charset utf-8;
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    error_page 404 /index.php;
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:${PHP_SOCKET};
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+NGINXEOF
+
+            nginx -t && systemctl reload nginx
+            print_success "Nginx updated with wildcard SSL!"
+
+            print_warning "IMPORTANT: Wildcard certificates obtained via manual DNS challenge"
+            print_warning "cannot be renewed automatically. Run the following before expiry (every 90 days):"
+            echo "  sudo certbot renew --manual --preferred-challenges dns"
+
         else
-            print_warning "SSL installation failed. You can try again later with:"
-            echo "  sudo certbot --nginx -d $DOMAIN_NAME"
+            print_warning "Wildcard SSL request failed or was cancelled."
+            print_info "You can retry later with:"
+            echo "  sudo certbot certonly --manual --preferred-challenges dns \\"
+            echo "    -d '*.${DOMAIN_NAME}' -d '${DOMAIN_NAME}'"
         fi
     else
-        print_info "You can run 'sudo certbot --nginx -d $DOMAIN_NAME' later to install SSL."
+        if prompt_yes_no "Proceed with SSL certificate request?" "y"; then
+            if certbot --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect 2>&1 | tee -a "$LOG_FILE"; then
+                print_success "SSL certificate installed and configured!"
+
+                # Setup auto-renewal
+                systemctl enable snap.certbot.renew.timer 2>/dev/null || true
+                print_success "SSL auto-renewal configured!"
+            else
+                print_warning "SSL installation failed. You can try again later with:"
+                echo "  sudo certbot --nginx -d $DOMAIN_NAME"
+            fi
+        else
+            print_info "You can run 'sudo certbot --nginx -d $DOMAIN_NAME' later to install SSL."
+        fi
     fi
 else
     echo ""
@@ -717,7 +818,11 @@ echo "Log file:             $LOG_FILE"
 if [ -n "$DOMAIN_NAME" ]; then
     echo "Domain:               $DOMAIN_NAME"
     if [ "$INSTALL_SSL" = true ]; then
-        echo "SSL:                  Enabled (https://$DOMAIN_NAME)"
+        if [ "$SSL_TYPE" = "wildcard" ]; then
+            echo "SSL:                  Wildcard (https://*.${DOMAIN_NAME})"
+        else
+            echo "SSL:                  Enabled (https://$DOMAIN_NAME)"
+        fi
     fi
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
