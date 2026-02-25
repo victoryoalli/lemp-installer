@@ -106,7 +106,7 @@ The script will prompt you for:
 
 5. **Optional Features**
    - WordPress packages
-   - SSL with Let's Encrypt
+   - SSL with Let's Encrypt (standard or wildcard)
    - SSH key generation
    - UFW firewall setup
 
@@ -290,6 +290,41 @@ sudo systemctl status postgresql               # Check PostgreSQL status
 sudo certbot renew                     # Renew certificates
 sudo certbot renew --dry-run           # Test renewal
 sudo certbot certificates              # List certificates
+```
+
+#### Wildcard Certificates (DNS Challenge)
+
+When you select **Wildcard SSL** during installation, the installer issues a certificate for `*.yourdomain.com` and `yourdomain.com` using Let's Encrypt's DNS-01 challenge. Certbot will **pause twice** and ask you to add TXT DNS records.
+
+**Before running the installer, have your DNS provider's control panel open and ready.**
+
+For each pause certbot makes:
+
+1. Add a **TXT record** to your DNS:
+
+   | Field | Value |
+   |-------|-------|
+   | **Name** | `_acme-challenge.yourdomain.com` |
+   | **Value** | (the string certbot displays — it changes each time) |
+   | **TTL** | `60` (or the lowest your provider allows) |
+
+2. Verify propagation before pressing Enter in certbot:
+
+   ```bash
+   dig TXT _acme-challenge.yourdomain.com +short
+   ```
+
+   The output must match the value certbot gave you. If it doesn't, wait 30–120 seconds and try again.
+
+3. Press Enter in certbot **only after** the correct value appears in `dig`.
+
+> **Important:** When certbot asks for the **second** TXT record, do **not** delete the first one — add the second record alongside it.
+
+**Renewal:** Wildcard certificates obtained via manual DNS challenge cannot be renewed automatically. Renew manually every ~90 days:
+
+```bash
+sudo certbot certonly --manual --preferred-challenges dns \
+  -d '*.yourdomain.com' -d 'yourdomain.com'
 ```
 
 ---
