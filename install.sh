@@ -415,15 +415,21 @@ if [ "$DATABASE_TYPE" = "mysql" ]; then
     print_info "Creating MySQL user '$DB_USER'..."
     MYSQL_ERR=$(mktemp)
 
-    # Drop and recreate user to ensure correct password/auth plugin
+    # Detect whether mysql_native_password plugin is available (removed in MySQL 8.4+)
+    if mysql -e "SELECT 1 FROM information_schema.PLUGINS WHERE PLUGIN_NAME='mysql_native_password' AND PLUGIN_STATUS='ACTIVE';" 2>/dev/null | grep -q 1; then
+        IDENTIFIED_WITH="IDENTIFIED WITH mysql_native_password BY '${DB_PASSWORD}'"
+    else
+        IDENTIFIED_WITH="IDENTIFIED BY '${DB_PASSWORD}'"
+    fi
+
     mysql 2>"$MYSQL_ERR" <<EOF
 CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';
-ALTER USER '${DB_USER}'@'localhost' IDENTIFIED WITH mysql_native_password BY '${DB_PASSWORD}';
+ALTER USER '${DB_USER}'@'localhost' ${IDENTIFIED_WITH};
 GRANT ALL PRIVILEGES ON *.* TO '${DB_USER}'@'localhost' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
     MYSQL_EXIT=$?
-    if [ $MYSQL_EXIT -ne 0 ]; then
+    if [ $MYSQL_EXIT -ne 0 ] || [ -s "$MYSQL_ERR" ]; then
         print_error "Failed to configure MySQL user. MySQL said:"
         cat "$MYSQL_ERR" >&2
         rm -f "$MYSQL_ERR"
@@ -431,16 +437,18 @@ EOF
     fi
     rm -f "$MYSQL_ERR"
 
-    # Test MySQL connection using a temp config file to avoid password in process list
+    # Test MySQL connection via TCP (forces password auth regardless of socket auth plugin)
     MYSQL_TEST_CNF=$(mktemp)
     chmod 600 "$MYSQL_TEST_CNF"
-    printf '[client]\nuser=%s\npassword=%s\n' "$DB_USER" "$DB_PASSWORD" > "$MYSQL_TEST_CNF"
+    # Quote the password to handle special characters in option file
+    printf '[client]\nuser=%s\npassword="%s"\nhost=127.0.0.1\n' "$DB_USER" "${DB_PASSWORD//\"/\\\"}" > "$MYSQL_TEST_CNF"
     if mysql --defaults-extra-file="$MYSQL_TEST_CNF" -e "SELECT 1;" >/dev/null 2>&1; then
         rm -f "$MYSQL_TEST_CNF"
         print_success "MySQL user '$DB_USER' created and configured successfully!"
     else
         rm -f "$MYSQL_TEST_CNF"
         print_error "Failed to connect as MySQL user '$DB_USER' after creation"
+        print_info "Hint: check 'mysql -u root -e \"SHOW CREATE USER ${DB_USER}@localhost\"' to inspect auth plugin"
         exit 1
     fi
 else
