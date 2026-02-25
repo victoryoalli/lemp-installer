@@ -413,9 +413,23 @@ if [ "$DATABASE_TYPE" = "mysql" ]; then
 
     # Create MySQL user and grant privileges
     print_info "Creating MySQL user '$DB_USER'..."
-    mysql -e "CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASSWORD';" 2>/dev/null || true
-    mysql -e "GRANT ALL PRIVILEGES ON *.* TO '$DB_USER'@'localhost' WITH GRANT OPTION;"
-    mysql -e "FLUSH PRIVILEGES;"
+    MYSQL_ERR=$(mktemp)
+
+    # Drop and recreate user to ensure correct password/auth plugin
+    mysql 2>"$MYSQL_ERR" <<EOF
+CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';
+ALTER USER '${DB_USER}'@'localhost' IDENTIFIED WITH mysql_native_password BY '${DB_PASSWORD}';
+GRANT ALL PRIVILEGES ON *.* TO '${DB_USER}'@'localhost' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+EOF
+    MYSQL_EXIT=$?
+    if [ $MYSQL_EXIT -ne 0 ]; then
+        print_error "Failed to configure MySQL user. MySQL said:"
+        cat "$MYSQL_ERR" >&2
+        rm -f "$MYSQL_ERR"
+        exit 1
+    fi
+    rm -f "$MYSQL_ERR"
 
     # Test MySQL connection using a temp config file to avoid password in process list
     MYSQL_TEST_CNF=$(mktemp)
@@ -426,7 +440,7 @@ if [ "$DATABASE_TYPE" = "mysql" ]; then
         print_success "MySQL user '$DB_USER' created and configured successfully!"
     else
         rm -f "$MYSQL_TEST_CNF"
-        print_error "Failed to create or configure MySQL user"
+        print_error "Failed to connect as MySQL user '$DB_USER' after creation"
         exit 1
     fi
 else
