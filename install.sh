@@ -13,6 +13,9 @@
 #   curl -fsSL https://raw.githubusercontent.com/victoryoalli/lemp-installer/refs/heads/main/install.sh -o install.sh
 #   chmod +x install.sh
 #   sudo ./install.sh
+#
+# Apply SSL Nginx config after obtaining a certificate:
+#   sudo ./install.sh --apply-ssl
 ###############################################################################
 
 set -e  # Exit on error
