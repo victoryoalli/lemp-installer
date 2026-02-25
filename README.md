@@ -45,6 +45,7 @@ sudo ./install.sh
 - 🛡️ **UFW firewall** configuration (optional)
 - 📦 **Composer** installed automatically
 - 🌐 **WordPress support** (optional)
+- ⚙️ **Laravel-optimized PHP settings** — memory, upload limits, OPcache, and timezone configured automatically
 - 📝 **Secure logging** — log file is restricted to root (mode 600)
 - ✅ **Automatic validation** and health checks
 - 🔐 **Input validation** — usernames, site names, and domain names are validated before use
@@ -344,6 +345,33 @@ sudo ./install.sh --apply-ssl
 ```
 
 The script will ask for your domain and site name, then write the full SSL Nginx configuration and reload Nginx automatically.
+
+---
+
+### ⚙️ Reconfiguring PHP settings
+
+After a full install, or after upgrading to a new PHP version, you can re-apply the Laravel-optimized PHP settings without running the full installer:
+
+```bash
+# Auto-detect installed PHP version
+sudo ./install.sh --reconfigure-php
+
+# Or specify a version explicitly
+sudo ./install.sh --reconfigure-php 8.4
+```
+
+This writes (or overwrites) `/etc/php/<version>/fpm/conf.d/99-laravel.ini` with:
+
+| Setting | Value |
+|---------|-------|
+| `memory_limit` | 256M |
+| `upload_max_filesize` | 64M |
+| `post_max_size` | 64M |
+| `max_execution_time` | 60 |
+| `date.timezone` | UTC |
+| OPcache | enabled, 128M, 10k files |
+
+If a `99-wordpress.ini` file exists from a previous install, it is carried over automatically. The PHP-FPM service is restarted if it's running.
 
 ---
 
