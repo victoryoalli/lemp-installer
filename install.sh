@@ -545,7 +545,8 @@ else
     NGINX_SERVER_NAME="${DOMAIN_NAME:-localhost}"
 fi
 
-cat > "$NGINX_CONFIG" << EOF
+if [ "$INSTALL_WORDPRESS" = true ]; then
+    cat > "$NGINX_CONFIG" << EOF
 server {
     listen 80;
     listen [::]:80;
@@ -553,11 +554,61 @@ server {
     server_name ${NGINX_SERVER_NAME};
     root /home/$SYSTEM_USER/www/current/public;
 
+    client_max_body_size 64M;
+
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Referrer-Policy "no-referrer-when-downgrade";
 
     index index.html index.php;
+    charset utf-8;
 
+    location / {
+        try_files \$uri \$uri/ /index.php?\$args;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    location = /xmlrpc.php { deny all; access_log off; log_not_found off; }
+    location = /wp-config.php { deny all; }
+    location ~* /(?:uploads|files)/.*\.php$ { deny all; }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:$PHP_SOCKET;
+        fastcgi_read_timeout 300;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+EOF
+else
+    cat > "$NGINX_CONFIG" << EOF
+server {
+    listen 80;
+    listen [::]:80;
+
+    server_name ${NGINX_SERVER_NAME};
+    root /home/$SYSTEM_USER/www/current/public;
+
+    client_max_body_size 100M;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Referrer-Policy "no-referrer-when-downgrade";
+
+    index index.html index.php;
     charset utf-8;
 
     location / {
@@ -567,11 +618,18 @@ server {
     location = /favicon.ico { access_log off; log_not_found off; }
     location = /robots.txt  { access_log off; log_not_found off; }
 
+    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
     error_page 404 /index.php;
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:$PHP_SOCKET;
+        fastcgi_read_timeout 300;
     }
 
     location ~ /\.(?!well-known).* {
@@ -579,6 +637,7 @@ server {
     }
 }
 EOF
+fi
 
 # Enable site
 ln -sf "$NGINX_CONFIG" /etc/nginx/sites-enabled/
@@ -687,7 +746,8 @@ if [ "$INSTALL_SSL" = true ]; then
             NGINX_CONFIG="/etc/nginx/sites-available/$SITE_NAME"
             CERT_PATH="/etc/letsencrypt/live/${DOMAIN_NAME}"
 
-            cat > "$NGINX_CONFIG" << NGINXEOF
+            if [ "$INSTALL_WORDPRESS" = true ]; then
+                cat > "$NGINX_CONFIG" << NGINXEOF
 server {
     listen 80;
     listen [::]:80;
@@ -707,8 +767,73 @@ server {
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
+    client_max_body_size 64M;
+
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Referrer-Policy "no-referrer-when-downgrade";
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    index index.html index.php;
+    charset utf-8;
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$args;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    location = /xmlrpc.php { deny all; access_log off; log_not_found off; }
+    location = /wp-config.php { deny all; }
+    location ~* /(?:uploads|files)/.*\.php$ { deny all; }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:${PHP_SOCKET};
+        fastcgi_read_timeout 300;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+NGINXEOF
+            else
+                cat > "$NGINX_CONFIG" << NGINXEOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN_NAME} *.${DOMAIN_NAME};
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+
+    server_name ${DOMAIN_NAME} *.${DOMAIN_NAME};
+    root /home/$SYSTEM_USER/www/current/public;
+
+    ssl_certificate ${CERT_PATH}/fullchain.pem;
+    ssl_certificate_key ${CERT_PATH}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    client_max_body_size 100M;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Referrer-Policy "no-referrer-when-downgrade";
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     index index.html index.php;
     charset utf-8;
@@ -720,11 +845,18 @@ server {
     location = /favicon.ico { access_log off; log_not_found off; }
     location = /robots.txt  { access_log off; log_not_found off; }
 
+    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
     error_page 404 /index.php;
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:${PHP_SOCKET};
+        fastcgi_read_timeout 300;
     }
 
     location ~ /\.(?!well-known).* {
@@ -732,6 +864,7 @@ server {
     }
 }
 NGINXEOF
+            fi
 
             nginx -t && systemctl reload nginx
             print_success "Nginx updated with wildcard SSL!"
