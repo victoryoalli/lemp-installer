@@ -327,6 +327,16 @@ sudo certbot certonly --manual --preferred-challenges dns \
   -d '*.yourdomain.com' -d 'yourdomain.com'
 ```
 
+#### Applying SSL config after certificate issuance
+
+Once certbot has successfully issued your wildcard certificate, run:
+
+```bash
+sudo ./install.sh --apply-ssl
+```
+
+The script will ask for your domain and site name, then write the full SSL Nginx configuration and reload Nginx automatically.
+
 ---
 
 ## 🐛 Troubleshooting

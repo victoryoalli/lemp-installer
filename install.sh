@@ -86,6 +86,14 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 ###############################################################################
+# Argument parsing
+###############################################################################
+APPLY_SSL_MODE=false
+if [ "${1:-}" = "--apply-ssl" ]; then
+    APPLY_SSL_MODE=true
+fi
+
+###############################################################################
 # Check Ubuntu version
 ###############################################################################
 if [ -f /etc/os-release ]; then
@@ -130,9 +138,11 @@ echo ""
 print_info "Repository: https://github.com/victoryoalli/lemp-installer"
 echo ""
 
-if ! prompt_yes_no "Do you want to continue?" "y"; then
-    print_info "Installation cancelled."
-    exit 0
+if [ "$APPLY_SSL_MODE" = false ]; then
+    if ! prompt_yes_no "Do you want to continue?" "y"; then
+        print_info "Installation cancelled."
+        exit 0
+    fi
 fi
 
 ###############################################################################
@@ -165,6 +175,257 @@ validate_domain() {
     fi
     return 0
 }
+
+###############################################################################
+# write_ssl_nginx_config: write the full SSL Nginx config (WordPress or Laravel)
+#   Args: nginx_config domain_name system_user php_socket cert_path install_wordpress
+###############################################################################
+write_ssl_nginx_config() {
+    local nginx_config="$1"
+    local domain_name="$2"
+    local system_user="$3"
+    local php_socket="$4"
+    local cert_path="$5"
+    local install_wordpress="$6"
+
+    if [ "$install_wordpress" = true ]; then
+        cat > "$nginx_config" << NGINXEOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${domain_name} *.${domain_name};
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+
+    server_name ${domain_name} *.${domain_name};
+    root /home/${system_user}/www/current/public;
+
+    ssl_certificate ${cert_path}/fullchain.pem;
+    ssl_certificate_key ${cert_path}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    client_max_body_size 64M;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Referrer-Policy "no-referrer-when-downgrade";
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    index index.html index.php;
+    charset utf-8;
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$args;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    location = /xmlrpc.php { deny all; access_log off; log_not_found off; }
+    location = /wp-config.php { deny all; }
+    location ~* /(?:uploads|files)/.*\.php$ { deny all; }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:${php_socket};
+        fastcgi_read_timeout 300;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+NGINXEOF
+    else
+        cat > "$nginx_config" << NGINXEOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${domain_name} *.${domain_name};
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+
+    server_name ${domain_name} *.${domain_name};
+    root /home/${system_user}/www/current/public;
+
+    ssl_certificate ${cert_path}/fullchain.pem;
+    ssl_certificate_key ${cert_path}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    client_max_body_size 100M;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Referrer-Policy "no-referrer-when-downgrade";
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    index index.html index.php;
+    charset utf-8;
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    error_page 404 /index.php;
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:${php_socket};
+        fastcgi_read_timeout 300;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+NGINXEOF
+    fi
+}
+
+###############################################################################
+# apply_ssl_nginx: apply SSL Nginx config to an existing site
+###############################################################################
+apply_ssl_nginx() {
+    clear
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║         Apply SSL Nginx Configuration                     ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    echo ""
+
+    # Prompt for domain name
+    local domain_name=""
+    while true; do
+        read -p "Enter domain name (e.g. example.com): " domain_name
+        if [ -n "$domain_name" ] && validate_domain "$domain_name"; then
+            break
+        fi
+        print_error "Invalid domain name. Please try again."
+    done
+
+    # Verify certificate exists
+    local cert_path="/etc/letsencrypt/live/${domain_name}"
+    if [ ! -d "$cert_path" ]; then
+        print_error "No certificate found for '${domain_name}'."
+        print_error "Expected path: ${cert_path}"
+        echo ""
+        print_info "Obtain a certificate first:"
+        echo "  sudo certbot certonly --manual --preferred-challenges dns \\"
+        echo "    -d '*.${domain_name}' -d '${domain_name}'"
+        exit 1
+    fi
+    print_success "Certificate found at ${cert_path}"
+    echo ""
+
+    # Auto-detect / prompt for site name
+    local site_name=""
+    local available_sites
+    available_sites=$(ls /etc/nginx/sites-available/ 2>/dev/null | grep -v "^default$" || true)
+    if [ -n "$available_sites" ]; then
+        print_info "Available Nginx sites:"
+        echo "$available_sites" | nl -ba
+        echo ""
+    fi
+    while true; do
+        read -p "Enter site name: " site_name
+        if [ -n "$site_name" ] && validate_site_name "$site_name"; then
+            break
+        fi
+        print_error "Invalid site name."
+    done
+
+    # Prompt for system user
+    local system_user
+    system_user=$(prompt_with_default "System user" "web")
+
+    # Auto-detect PHP FPM socket
+    local php_socket=""
+    local php_sock_file
+    php_sock_file=$(ls /run/php/php*-fpm.sock 2>/dev/null | head -1 || true)
+    if [ -n "$php_sock_file" ]; then
+        php_socket="$php_sock_file"
+        print_info "Detected PHP socket: ${php_socket}"
+    else
+        read -p "PHP FPM socket path (e.g. /run/php/php8.3-fpm.sock): " php_socket
+    fi
+    echo ""
+
+    # Detect WordPress vs Laravel
+    local install_wordpress=false
+    local webroot="/home/${system_user}/www/current"
+    if [ -f "${webroot}/public/wp-config.php" ] || [ -f "${webroot}/wp-config.php" ]; then
+        install_wordpress=true
+        print_info "WordPress installation detected."
+    else
+        print_info "Laravel/generic installation detected."
+    fi
+
+    # Write Nginx config
+    local nginx_config="/etc/nginx/sites-available/${site_name}"
+    print_info "Writing SSL Nginx config to ${nginx_config}..."
+    write_ssl_nginx_config "$nginx_config" "$domain_name" "$system_user" "$php_socket" "$cert_path" "$install_wordpress"
+
+    # Ensure symlink exists in sites-enabled
+    if [ ! -L "/etc/nginx/sites-enabled/${site_name}" ]; then
+        ln -s "$nginx_config" "/etc/nginx/sites-enabled/${site_name}"
+        print_info "Created symlink: /etc/nginx/sites-enabled/${site_name}"
+    fi
+
+    # Test and reload Nginx
+    echo ""
+    print_step "Testing Nginx configuration..."
+    if nginx -t; then
+        systemctl reload nginx
+        print_success "Nginx reloaded successfully!"
+    else
+        print_error "Nginx configuration test failed. Review ${nginx_config}."
+        exit 1
+    fi
+
+    echo ""
+    print_success "SSL configuration applied for ${domain_name}!"
+    echo ""
+    print_warning "Wildcard certificates obtained via manual DNS challenge cannot be"
+    print_warning "renewed automatically. Renew manually every ~90 days:"
+    echo ""
+    echo "  sudo certbot certonly --manual --preferred-challenges dns \\"
+    echo "    -d '*.${domain_name}' -d '${domain_name}'"
+    echo ""
+}
+
+###############################################################################
+# --apply-ssl early exit: skip full install flow
+###############################################################################
+if [ "$APPLY_SSL_MODE" = true ]; then
+    apply_ssl_nginx
+    exit 0
+fi
 
 ###############################################################################
 # Collect configuration parameters
@@ -793,125 +1054,7 @@ if [ "$INSTALL_SSL" = true ]; then
             NGINX_CONFIG="/etc/nginx/sites-available/$SITE_NAME"
             CERT_PATH="/etc/letsencrypt/live/${DOMAIN_NAME}"
 
-            if [ "$INSTALL_WORDPRESS" = true ]; then
-                cat > "$NGINX_CONFIG" << NGINXEOF
-server {
-    listen 80;
-    listen [::]:80;
-    server_name ${DOMAIN_NAME} *.${DOMAIN_NAME};
-    return 301 https://\$host\$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-
-    server_name ${DOMAIN_NAME} *.${DOMAIN_NAME};
-    root /home/$SYSTEM_USER/www/current/public;
-
-    ssl_certificate ${CERT_PATH}/fullchain.pem;
-    ssl_certificate_key ${CERT_PATH}/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-
-    client_max_body_size 64M;
-
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
-    add_header X-XSS-Protection "1; mode=block";
-    add_header Referrer-Policy "no-referrer-when-downgrade";
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-
-    index index.html index.php;
-    charset utf-8;
-
-    location / {
-        try_files \$uri \$uri/ /index.php?\$args;
-    }
-
-    location = /favicon.ico { access_log off; log_not_found off; }
-    location = /robots.txt  { access_log off; log_not_found off; }
-
-    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        access_log off;
-    }
-
-    location = /xmlrpc.php { deny all; access_log off; log_not_found off; }
-    location = /wp-config.php { deny all; }
-    location ~* /(?:uploads|files)/.*\.php$ { deny all; }
-
-    location ~ \.php$ {
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:${PHP_SOCKET};
-        fastcgi_read_timeout 300;
-    }
-
-    location ~ /\.(?!well-known).* {
-        deny all;
-    }
-}
-NGINXEOF
-            else
-                cat > "$NGINX_CONFIG" << NGINXEOF
-server {
-    listen 80;
-    listen [::]:80;
-    server_name ${DOMAIN_NAME} *.${DOMAIN_NAME};
-    return 301 https://\$host\$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    listen [::]:443 ssl;
-
-    server_name ${DOMAIN_NAME} *.${DOMAIN_NAME};
-    root /home/$SYSTEM_USER/www/current/public;
-
-    ssl_certificate ${CERT_PATH}/fullchain.pem;
-    ssl_certificate_key ${CERT_PATH}/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-
-    client_max_body_size 100M;
-
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
-    add_header X-XSS-Protection "1; mode=block";
-    add_header Referrer-Policy "no-referrer-when-downgrade";
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-
-    index index.html index.php;
-    charset utf-8;
-
-    location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
-    }
-
-    location = /favicon.ico { access_log off; log_not_found off; }
-    location = /robots.txt  { access_log off; log_not_found off; }
-
-    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        access_log off;
-    }
-
-    error_page 404 /index.php;
-
-    location ~ \.php$ {
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:${PHP_SOCKET};
-        fastcgi_read_timeout 300;
-    }
-
-    location ~ /\.(?!well-known).* {
-        deny all;
-    }
-}
-NGINXEOF
-            fi
+            write_ssl_nginx_config "$NGINX_CONFIG" "$DOMAIN_NAME" "$SYSTEM_USER" "$PHP_SOCKET" "$CERT_PATH" "$INSTALL_WORDPRESS"
 
             nginx -t && systemctl reload nginx
             print_success "Nginx updated with wildcard SSL!"
