@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Useful commands reference
 - Contributing guidelines
 
-## [1.4.0] - 2026-02-24
+## [1.4.0] - 2026-02-25
 
 ### Added
 - Laravel-optimized PHP drop-in config written to `/etc/php/<version>/fpm/conf.d/99-laravel.ini` on every full install (`memory_limit=256M`, `upload_max_filesize=64M`, `post_max_size=64M`, `max_execution_time=60`, `date.timezone=UTC`, OPcache enabled)
