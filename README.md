@@ -327,6 +327,14 @@ sudo certbot certonly --manual --preferred-challenges dns \
   -d '*.yourdomain.com' -d 'yourdomain.com'
 ```
 
+After renewal, reload Nginx to pick up the new certificate files:
+
+```bash
+sudo systemctl reload nginx
+```
+
+> **Note:** You do not need to run `--apply-ssl` again on renewal. The Nginx configuration stays the same — only the certificate files change. `--apply-ssl` is a one-time setup step.
+
 #### Applying SSL config after certificate issuance
 
 Once certbot has successfully issued your wildcard certificate, run:
