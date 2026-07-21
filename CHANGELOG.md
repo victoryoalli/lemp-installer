@@ -52,6 +52,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--reconfigure-php [version]` mode — re-applies PHP drop-in settings for an installed PHP version without running the full installer; auto-detects the active version when no argument is given; carries over WordPress settings if present
 - `-h` / `--help` flag — prints usage, all available modes with examples, and exits cleanly
 
+## [1.5.0] - 2026-07-20
+
+### Added
+- Dedicated PHP-FPM pool running as the deploy user (`/etc/php/<version>/fpm/pool.d/<user>.conf`, socket `/run/php/php<version>-fpm-<user>.sock` owned by `www-data:www-data` mode `0660`) — PHP writes to `storage/` and `bootstrap/cache` as the same user that deploys, eliminating permission conflicts
+- Releases/shared deploy layout: `~/www/current` is now a symlink to `~/www/releases/<name>`; `storage/` and `.env` live in `~/www/shared/` and are symlinked into each release
+- Shared Nginx snippet `/etc/nginx/snippets/fastcgi-php-realpath.conf` used by all generated server blocks
+- `--fix-permissions` mode — retrofits servers installed by older versions: creates the per-user pool, fixes home-dir permissions and group membership, fixes ownership/permissions of `~/www`, and repoints Nginx site configs to the new socket (with backups and automatic rollback if `nginx -t` fails)
+- Post-install instructions now include an example Supervisor config for Laravel queue workers running as the deploy user
+
+### Changed
+- Nginx PHP handler sets `SCRIPT_FILENAME`/`DOCUMENT_ROOT` from `$realpath_root`, so OPcache resolves real release paths and new deploys take effect immediately after the `current` symlink flip
+- Home directory is now `750` with `www-data` added to the deploy user's group (previously `755` world-traversable)
+- Stock `www` PHP-FPM pool is disabled on fresh installs (renamed to `www.conf.disabled`); `--fix-permissions` leaves it untouched
+- `--apply-ssl` socket auto-detection now prefers the per-user pool socket (`php*-fpm-<user>.sock`) before falling back to the stock socket
+- Post-install deployment instructions rewritten for the releases/shared workflow (deploy as the user, never as root)
+- `--reconfigure-php` warns when the target PHP version has no per-user pool (e.g. after a PHP upgrade) and suggests running `--fix-permissions`
+
+### Fixed
+- "Permission denied" errors on `storage/` and `bootstrap/cache` after deploys (PHP-FPM previously ran as `www-data` while files belonged to the deploy user)
+- Stale code served by OPcache after symlink-based deploys
+
 ## [Unreleased]
 
 ### Planned Features
@@ -105,4 +126,6 @@ Found a bug or have a feature request? Please check our [Contributing Guidelines
 ---
 
 [1.0.0]: https://github.com/victoryoalli/lemp-installer/releases/tag/v1.0.0
-[Unreleased]: https://github.com/victoryoalli/lemp-installer/compare/v1.0.0...HEAD
+[1.4.0]: https://github.com/victoryoalli/lemp-installer/compare/v1.0.0...v1.4.0
+[1.5.0]: https://github.com/victoryoalli/lemp-installer/compare/v1.4.0...v1.5.0
+[Unreleased]: https://github.com/victoryoalli/lemp-installer/compare/v1.5.0...HEAD

@@ -41,6 +41,8 @@ sudo ./install.sh
 - 🗄️ **Database choice**: MySQL 8.0+ or PostgreSQL 15+
 - 🔒 **SSL/TLS** configuration with Let's Encrypt
 - 👤 **System user** setup for deployments
+- 🧑‍🔧 **Per-user PHP-FPM pool** — PHP runs as the deploy user, so `storage/` and `bootstrap/cache` never have permission conflicts (no `chmod` after deploys)
+- 🚀 **Releases/shared deploy layout** — `current` is a symlink to a release; `storage/` and `.env` live in `shared/` and survive deploys; Nginx uses `$realpath_root` so OPcache never serves stale code after a release flip
 - 🔑 **SSH keys** generation for GitHub/GitLab integration
 - 🛡️ **UFW firewall** configuration (optional)
 - 📦 **Composer** installed automatically
@@ -116,23 +118,35 @@ The script will prompt you for:
 ## 📁 Directory Structure
 
 ```
-/home/web/
+/home/web/                       (mode 750; www-data traverses via group)
 ├── www/
-│   └── current/
-│       └── public/
-│           └── index.php (phpinfo test)
+│   ├── current -> releases/initial   (symlink, flipped on each deploy)
+│   ├── releases/
+│   │   └── initial/
+│   │       └── public/
+│   │           └── index.php (phpinfo test)
+│   └── shared/
+│       ├── storage/             (Laravel storage, shared across releases)
+│       └── .env                 (environment file, shared across releases)
 └── .ssh/
     ├── authorized_keys
     ├── id_ed25519
     └── id_ed25519.pub
 
 /etc/nginx/
-└── sites-available/
-    └── mysite
+├── sites-available/
+│   └── mysite
+└── snippets/
+    └── fastcgi-php-realpath.conf    (PHP handler using $realpath_root)
+
+/etc/php/8.3/fpm/pool.d/
+└── web.conf                     (PHP-FPM pool running as user "web")
 
 /var/log/
 └── lemp-install-YYYYMMDD-HHMMSS.log
 ```
+
+PHP-FPM runs as the deploy user (`web`) through a dedicated pool listening on `/run/php/php8.3-fpm-web.sock`. Nginx keeps running as `www-data` — it only serves static files and forwards requests to the socket.
 
 ---
 
@@ -178,13 +192,17 @@ CREATE DATABASE my_app;
 
 ## 🚢 Laravel Deployment
 
-### Step 1: Clone Your Repository
+Deploys use the releases/shared layout: each deploy is a fresh directory under `~/www/releases/`, `storage/` and `.env` live in `~/www/shared/` and are symlinked into every release, and `~/www/current` is a symlink flipped to activate a release.
+
+> **Always deploy as the `web` user, never as root.** PHP-FPM runs as `web`, so files created by root (artisan caches, logs) would break the site.
+
+### Step 1: Clone a Release
 
 ```bash
 sudo su - web
-cd ~/www
-git clone git@github.com:username/repo.git current
-cd current
+cd ~/www/releases
+git clone git@github.com:username/repo.git release-1
+cd release-1
 ```
 
 ### Step 2: Install Dependencies
@@ -193,11 +211,14 @@ cd current
 composer install --no-dev --optimize-autoloader
 ```
 
-### Step 3: Configure Laravel
+### Step 3: Link Shared Resources and Configure Laravel
 
 ```bash
-cp .env.example .env
-nano .env
+rm -rf storage && ln -nfs ~/www/shared/storage storage
+ln -nfs ~/www/shared/.env .env
+
+cp .env.example ~/www/shared/.env
+nano ~/www/shared/.env
 ```
 
 Edit `.env` file:
@@ -234,18 +255,51 @@ DB_PASSWORD=your_password
 
 ```bash
 php artisan key:generate
+php artisan storage:link
 php artisan migrate --force
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
-php artisan storage:link
 ```
 
-### Step 5: Set Permissions
+### Step 5: Activate the Release
 
 ```bash
-chmod -R 775 storage bootstrap/cache
+ln -nfs ~/www/releases/release-1 ~/www/current
+php artisan queue:restart   # if you run queue workers
 ```
+
+No `chmod` or `chown` is needed: PHP-FPM runs as `web`, the same user that deploys.
+
+For the next deploy, repeat steps 1–5 with a new release name (a timestamp works well), then delete old releases when you no longer need them for rollback.
+
+### Optional: Queue Workers with Supervisor
+
+```bash
+sudo apt install supervisor
+sudo nano /etc/supervisor/conf.d/laravel-worker.conf
+```
+
+```ini
+[program:laravel-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /home/web/www/current/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=web
+numprocs=2
+redirect_stderr=true
+stdout_logfile=/home/web/www/shared/storage/logs/worker.log
+stopwaitsecs=3600
+```
+
+```bash
+sudo supervisorctl reread && sudo supervisorctl update
+```
+
+The worker must run as `web` (`user=web`): a worker running as another user would create log files the web processes can't write to. After each deploy, `php artisan queue:restart` makes workers pick up the new code.
 
 ---
 
@@ -385,25 +439,53 @@ If a `99-wordpress.ini` file exists from a previous install, it is carried over 
 
 ---
 
+### 🔧 Fixing permissions on an existing server
+
+If your server was set up with an older version of this script (PHP-FPM running as `www-data`, flat `current/` directory), you can retrofit the new permission model without reinstalling:
+
+```bash
+sudo ./install.sh --fix-permissions
+```
+
+This mode:
+
+- Creates the dedicated PHP-FPM pool running as your deploy user (e.g. `web`)
+- Sets `/home/web` to `750` and adds `www-data` to the `web` group so Nginx can traverse it
+- Fixes ownership (`web:web`) and permissions of `~/www` (dirs 755, files 644, `storage` 775)
+- Repoints your Nginx site configs to the new socket and the `$realpath_root` snippet (backups are created; changes are rolled back automatically if `nginx -t` fails)
+- Restarts PHP-FPM and Nginx
+
+It never touches the stock `www` pool (other sites may use it) and never restructures a flat `current/` directory into `releases/` — it prints manual migration steps instead.
+
+---
+
 ## 🐛 Troubleshooting
 
 ### 502 Bad Gateway
 
-**Issue:** PHP-FPM not running
+**Issue:** PHP-FPM not running or wrong socket path
 
 ```bash
 sudo systemctl restart php8.3-fpm
-ls -la /run/php/php8.3-fpm.sock
+ls -la /run/php/php8.3-fpm-web.sock   # per-user pool socket (v1.5.0+)
 ```
+
+The socket must be owned by `www-data:www-data` with mode `0660`. If your Nginx config still points to the old `/run/php/php8.3-fpm.sock`, run `sudo ./install.sh --fix-permissions`.
 
 ### 403 Forbidden
 
-**Issue:** Incorrect permissions
+**Issue:** Nginx (`www-data`) can't traverse `/home/web`
+
+The home directory is `750` and `www-data` reaches the web root through membership in the `web` group. Verify and repair:
 
 ```bash
-sudo chmod 755 /home/web
-sudo chmod -R 775 /home/web/www/current/storage
+id www-data                        # must list "web" among the groups
+sudo usermod -aG web www-data      # if missing
+sudo chmod 750 /home/web
+sudo systemctl restart nginx       # restart (not reload) to pick up the group
 ```
+
+You should **not** need `chmod 755 /home/web` or any `chmod -R 775` on the project — if you do, PHP-FPM is probably not running as `web` (run `--fix-permissions`).
 
 ### Database Connection Error
 
