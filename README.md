@@ -556,6 +556,7 @@ sudo apt update && sudo apt upgrade -y
 - [Troubleshooting](docs/troubleshooting.md)
 - [Security Guide](docs/security.md)
 - [FAQ](docs/faq.md)
+- [Manual Test Plan](docs/testing.md) (for contributors)
 
 ---
 

@@ -33,6 +33,8 @@ sudo bash install.sh           # Full install
 sudo bash install.sh --apply-ssl  # SSL config only
 ```
 
+Full manual test plan (fresh install, retrofit from 1.4.0, release-flip/OPcache check, sign-off checklist): `docs/testing.md`.
+
 ## Gotchas
 
 - PHP drop-in config written to `/etc/php/<version>/fpm/conf.d/99-laravel.ini` (memory_limit=256M, upload=64M, OPcache enabled, timezone=UTC)
