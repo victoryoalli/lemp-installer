@@ -31,7 +31,7 @@
 set -e  # Exit on error
 
 # Script version
-VERSION="1.5.0"
+VERSION="1.6.0"
 
 # Colors for output
 RED='\033[0;31m'
@@ -867,8 +867,23 @@ while true; do
     validate_domain "$DOMAIN_NAME" && break
 done
 
-# PHP version
-PHP_VERSION="8.3"
+# PHP version — Ubuntu's default plus newer releases from ppa:ondrej/php
+OS_PHP_VERSION=$(apt-cache depends php 2>/dev/null | grep -oPm1 'php\K[0-9]+\.[0-9]+' || true)
+OS_PHP_VERSION="${OS_PHP_VERSION:-8.3}"
+echo ""
+echo "Select PHP version:"
+echo "  1) ${OS_PHP_VERSION} — Ubuntu default (official repositories)"
+echo "  2) 8.4 — adds ppa:ondrej/php"
+echo "  3) 8.5 — adds ppa:ondrej/php"
+PHP_CHOICE=""
+while [[ ! "$PHP_CHOICE" =~ ^[123]$ ]]; do
+    read -p "Enter your choice (1-3): " PHP_CHOICE
+done
+case "$PHP_CHOICE" in
+    1) PHP_VERSION="$OS_PHP_VERSION" ;;
+    2) PHP_VERSION="8.4" ;;
+    3) PHP_VERSION="8.5" ;;
+esac
 print_info "Will use PHP version: $PHP_VERSION"
 
 # Optional installations
@@ -964,48 +979,59 @@ apt update
 print_info "Upgrading installed packages..."
 apt upgrade -y
 
+# PHP versions newer than the OS default come from ppa:ondrej/php
+if ! apt-cache show "php${PHP_VERSION}-fpm" &> /dev/null; then
+    print_info "PHP ${PHP_VERSION} is not in the Ubuntu repositories — adding ppa:ondrej/php..."
+    apt install -y software-properties-common
+    add-apt-repository -y ppa:ondrej/php
+    apt update
+    if ! apt-cache show "php${PHP_VERSION}-fpm" &> /dev/null; then
+        print_error "PHP ${PHP_VERSION} is not available even after adding ppa:ondrej/php."
+        exit 1
+    fi
+fi
+
 # Install database packages based on selection
 if [ "$DATABASE_TYPE" = "mysql" ]; then
     print_info "Installing core packages (Nginx, MySQL, PHP)..."
-    apt install -y nginx mysql-server php-fpm php-mysql acl zip curl wget git unzip
+    apt install -y nginx mysql-server "php${PHP_VERSION}-fpm" "php${PHP_VERSION}-mysql" acl zip curl wget git unzip
 else
     print_info "Installing core packages (Nginx, PostgreSQL, PHP)..."
-    apt install -y nginx postgresql postgresql-contrib php-fpm php-pgsql acl zip curl wget git unzip
+    apt install -y nginx postgresql postgresql-contrib "php${PHP_VERSION}-fpm" "php${PHP_VERSION}-pgsql" acl zip curl wget git unzip
 fi
 
+# Versioned package names keep the selected PHP version deterministic once the
+# PPA is present (unversioned php-* meta-packages would pull the newest one).
+# json is built into PHP >= 8.0 and tokenizer ships with phpX.Y-common.
 print_info "Installing PHP extensions for Laravel..."
 if [ "$DATABASE_TYPE" = "mysql" ]; then
     apt install -y \
-        php-fpm \
-        php-cli \
-        php-common \
-        php-mysql \
-        php-zip \
-        php-gd \
-        php-mbstring \
-        php-curl \
-        php-xml \
-        php-bcmath \
+        "php${PHP_VERSION}-fpm" \
+        "php${PHP_VERSION}-cli" \
+        "php${PHP_VERSION}-common" \
+        "php${PHP_VERSION}-mysql" \
+        "php${PHP_VERSION}-zip" \
+        "php${PHP_VERSION}-gd" \
+        "php${PHP_VERSION}-mbstring" \
+        "php${PHP_VERSION}-curl" \
+        "php${PHP_VERSION}-xml" \
+        "php${PHP_VERSION}-bcmath" \
         openssl \
-        php-tokenizer \
-        php-json \
-        php-intl
+        "php${PHP_VERSION}-intl"
 else
     apt install -y \
-        php-fpm \
-        php-cli \
-        php-common \
-        php-pgsql \
-        php-zip \
-        php-gd \
-        php-mbstring \
-        php-curl \
-        php-xml \
-        php-bcmath \
+        "php${PHP_VERSION}-fpm" \
+        "php${PHP_VERSION}-cli" \
+        "php${PHP_VERSION}-common" \
+        "php${PHP_VERSION}-pgsql" \
+        "php${PHP_VERSION}-zip" \
+        "php${PHP_VERSION}-gd" \
+        "php${PHP_VERSION}-mbstring" \
+        "php${PHP_VERSION}-curl" \
+        "php${PHP_VERSION}-xml" \
+        "php${PHP_VERSION}-bcmath" \
         openssl \
-        php-tokenizer \
-        php-json \
-        php-intl
+        "php${PHP_VERSION}-intl"
 fi
 
 print_success "All packages installed successfully!"
@@ -1381,14 +1407,22 @@ if [ "$INSTALL_WORDPRESS" = true ]; then
     echo ""
     print_step "Step 6/8: Installing WordPress packages"
 
+    # Ubuntu's archive builds imagick only for the default PHP version;
+    # ondrej's PPA ships a versioned build for the rest
+    if apt-cache show "php${PHP_VERSION}-imagick" &> /dev/null; then
+        IMAGICK_PACKAGE="php${PHP_VERSION}-imagick"
+    else
+        IMAGICK_PACKAGE="php-imagick"
+    fi
+
     apt install -y \
-        php-gd \
-        php-curl \
-        php-dom \
-        php-imagick \
-        php-mbstring \
-        php-zip \
-        php-intl
+        "php${PHP_VERSION}-gd" \
+        "php${PHP_VERSION}-curl" \
+        "php${PHP_VERSION}-xml" \
+        "$IMAGICK_PACKAGE" \
+        "php${PHP_VERSION}-mbstring" \
+        "php${PHP_VERSION}-zip" \
+        "php${PHP_VERSION}-intl"
 
     # WordPress-specific PHP settings
     print_info "Applying WordPress PHP settings..."

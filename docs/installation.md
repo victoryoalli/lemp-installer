@@ -1,6 +1,6 @@
 # Installation Guide
 
-Complete guide to installing the LEMP stack (Nginx, MySQL/PostgreSQL, PHP 8.3, Composer) optimized for Laravel on Ubuntu 24.04.
+Complete guide to installing the LEMP stack (Nginx, MySQL/PostgreSQL, PHP 8.3/8.4/8.5, Composer) optimized for Laravel on Ubuntu 24.04.
 
 ## Requirements
 
@@ -32,7 +32,7 @@ sudo ./install.sh
 |-----------|---------|-------|
 | Nginx | Latest | Runs as `www-data`, serves static files and proxies PHP |
 | MySQL **or** PostgreSQL | 8.0+ / 15+ | You choose one during install |
-| PHP-FPM | 8.3 | Runs as your deploy user through a dedicated pool |
+| PHP-FPM | 8.3 (default), 8.4 or 8.5 | Runs as your deploy user through a dedicated pool; 8.4/8.5 come from `ppa:ondrej/php` |
 | Composer | Latest | PHP dependency manager |
 | Certbot | Latest | Only if you enable SSL |
 | UFW | Latest | Only if you enable the firewall |
@@ -42,7 +42,8 @@ sudo ./install.sh
 1. **Database**: MySQL or PostgreSQL, plus a database username and password.
 2. **System user**: the deploy user (default `web`). It owns `/home/web/www` and is the user PHP-FPM runs as.
 3. **Site**: a site name (for the Nginx config filename) and an optional domain name.
-4. **Optional features**: WordPress packages, SSL (standard or wildcard), SSH key generation, UFW firewall.
+4. **PHP version**: Ubuntu's default 8.3, or a newer release (8.4, 8.5). Picking a newer one adds `ppa:ondrej/php` automatically before installing packages.
+5. **Optional features**: WordPress packages, SSL (standard or wildcard), SSH key generation, UFW firewall.
 
 A summary is shown before anything is installed.
 

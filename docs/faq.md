@@ -32,6 +32,10 @@ Yes. The installer prompts for the system user (default `web`). Everything — t
 
 The installer provisions one site per run and is optimized for that case. For a second site under a *different* user you can create the user, pool, and Nginx config by hand following the same pattern (or re-run relevant parts manually). Note that on fresh installs the stock `www` pool is disabled; `--fix-permissions` never disables it, precisely because other sites might use it.
 
+## Can I install a PHP version newer than Ubuntu's default?
+
+Yes. The installer asks which PHP version to use: Ubuntu 24.04's default (8.3) or a newer release (8.4, 8.5). If you pick a version that isn't in the OS repositories, the installer adds `ppa:ondrej/php` automatically and installs versioned packages (`php8.4-fpm`, `php8.4-mysql`, …). Everything else — the per-user pool, the socket path, the drop-in configs — follows the version you choose.
+
 ## How do I upgrade PHP later?
 
 1. Install the new PHP version and extensions.

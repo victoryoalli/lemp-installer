@@ -73,10 +73,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - "Permission denied" errors on `storage/` and `bootstrap/cache` after deploys (PHP-FPM previously ran as `www-data` while files belonged to the deploy user)
 - Stale code served by OPcache after symlink-based deploys
 
+## [1.6.0] - 2026-08-31
+
+### Added
+- PHP version selection during install: choose the Ubuntu default (8.3) or a newer release (8.4, 8.5); `ppa:ondrej/php` is added automatically only when the chosen version is not in the OS repositories
+
+### Changed
+- PHP packages are installed with explicit version names (`php8.4-fpm`, `php8.4-mysql`, …) instead of the unversioned meta-packages, so the selected version stays deterministic even with extra repositories present
+- Dropped `php-json` and `php-tokenizer` from the package list — JSON is built into PHP ≥ 8.0 and tokenizer ships with `phpX.Y-common`
+- WordPress installs use `phpX.Y-imagick` when available (ondrej PPA), falling back to `php-imagick` (Ubuntu builds imagick only for the default PHP)
+
 ## [Unreleased]
 
 ### Planned Features
-- Support for multiple PHP versions
 - PostgreSQL option alongside MySQL
 - Redis installation option
 - Node.js and npm installation
@@ -128,4 +137,5 @@ Found a bug or have a feature request? Please check our [Contributing Guidelines
 [1.0.0]: https://github.com/victoryoalli/lemp-installer/releases/tag/v1.0.0
 [1.4.0]: https://github.com/victoryoalli/lemp-installer/compare/v1.0.0...v1.4.0
 [1.5.0]: https://github.com/victoryoalli/lemp-installer/compare/v1.4.0...v1.5.0
-[Unreleased]: https://github.com/victoryoalli/lemp-installer/compare/v1.5.0...HEAD
+[1.6.0]: https://github.com/victoryoalli/lemp-installer/compare/v1.5.0...v1.6.0
+[Unreleased]: https://github.com/victoryoalli/lemp-installer/compare/v1.6.0...HEAD

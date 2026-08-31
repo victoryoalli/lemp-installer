@@ -6,7 +6,7 @@
 ![Nginx](https://img.shields.io/badge/nginx-%23009639.svg?style=for-the-badge&logo=nginx&logoColor=white)
 ![MySQL](https://img.shields.io/badge/mysql-%2300f.svg?style=for-the-badge&logo=mysql&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/postgresql-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
-![PHP](https://img.shields.io/badge/php-8.3-%23777BB4.svg?style=for-the-badge&logo=php&logoColor=white)
+![PHP](https://img.shields.io/badge/php-8.3--8.5-%23777BB4.svg?style=for-the-badge&logo=php&logoColor=white)
 ![Laravel](https://img.shields.io/badge/laravel-%23FF2D20.svg?style=for-the-badge&logo=laravel&logoColor=white)
 
 **Automated LEMP stack installation script optimized for Laravel**
@@ -39,6 +39,7 @@ sudo ./install.sh
 
 - 🎯 **Interactive installation** with sensible defaults
 - 🗄️ **Database choice**: MySQL 8.0+ or PostgreSQL 15+
+- 🐘 **PHP version choice**: Ubuntu's default 8.3, or 8.4 / 8.5 (`ppa:ondrej/php` added automatically)
 - 🔒 **SSL/TLS** configuration with Let's Encrypt
 - 👤 **System user** setup for deployments
 - 🧑‍🔧 **Per-user PHP-FPM pool** — PHP runs as the deploy user, so `storage/` and `bootstrap/cache` never have permission conflicts (no `chmod` after deploys)
@@ -61,21 +62,23 @@ sudo ./install.sh
 | **Nginx** | Latest | High-performance web server |
 | **MySQL** | 8.0+ | Relational database (choose one) |
 | **PostgreSQL** | 15+ | Relational database (choose one) |
-| **PHP** | 8.3 | PHP-FPM with essential extensions |
+| **PHP** | 8.3 / 8.4 / 8.5 | PHP-FPM with essential extensions (you pick the version; 8.4/8.5 come from `ppa:ondrej/php`) |
 | **Composer** | Latest | PHP dependency manager |
 | **Certbot** | Latest | SSL certificate automation |
 | **UFW** | Latest | Uncomplicated Firewall |
 
 ### PHP Extensions Included:
 
-- php-fpm, php-cli, php-common
-- php-mysql (MySQL) or php-pgsql (PostgreSQL), php-zip, php-gd
-- php-mbstring, php-curl, php-xml
-- php-bcmath, php-tokenizer, openssl
+Installed as versioned packages for the PHP version you pick (`php8.4-fpm`, `php8.4-mysql`, …):
+
+- fpm, cli, common
+- mysql (MySQL) or pgsql (PostgreSQL), zip, gd
+- mbstring, curl, xml
+- bcmath, intl, openssl
 
 ### Optional WordPress Extensions:
 
-- php-dom, php-imagick, php-intl
+- imagick (plus gd, curl, xml, mbstring, zip, intl)
 
 ---
 
@@ -107,7 +110,11 @@ The script will prompt you for:
    - Site name (letters, numbers, `_` or `-`)
    - Domain name (optional, validated format)
 
-5. **Optional Features**
+5. **PHP Version**
+   - Ubuntu's default 8.3, or a newer release (8.4, 8.5)
+   - Newer versions add `ppa:ondrej/php` automatically during install
+
+6. **Optional Features**
    - WordPress packages
    - SSL with Let's Encrypt (standard or wildcard)
    - SSH key generation

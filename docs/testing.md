@@ -232,6 +232,18 @@ sudo bash install.sh --reconfigure-php  # on lemp-fresh: NO per-user-pool warnin
 
 ---
 
+## T8 — PHP Version Selection (v1.6.0)
+
+On a reset `lemp-fresh`, run the fresh install and pick **PHP 8.4** at the version prompt (same answers as T1 otherwise). Must-pass:
+
+- The installer adds `ppa:ondrej/php` and `apt update` succeeds before packages install.
+- `php -v` reports 8.4 and `systemctl status php8.4-fpm` is active.
+- The per-user pool and socket use the chosen version: `/etc/php/8.4/fpm/pool.d/web.conf`, `/run/php/php8.4-fpm-web.sock`.
+- The drop-in exists at `/etc/php/8.4/fpm/conf.d/99-laravel.ini` and the site serves PHP through the 8.4 socket.
+- Control: a separate fresh install choosing option 1 (8.3) must **not** add the PPA (`ls /etc/apt/sources.list.d/ | grep -i ondrej` returns nothing).
+
+---
+
 ## Sign-off Checklist (before merging to main)
 
 - [ ] T1: all verification script checks PASS on a fresh install
@@ -241,5 +253,6 @@ sudo bash install.sh --reconfigure-php  # on lemp-fresh: NO per-user-pool warnin
 - [ ] T5: `--fix-permissions` retrofits a 1.4.0 server, leaves `www.conf` alone, creates backups, and is idempotent
 - [ ] T6 (optional): WordPress permalinks and uploads work
 - [ ] T7: help text and `--reconfigure-php` warning behave as expected
+- [ ] T8: PHP 8.4 install adds the PPA and wires pool/socket/drop-in to 8.4; the 8.3 path never adds the PPA
 
 If any test fails, fix on the branch, push, re-download the raw script on the VM, and re-run the affected test from a clean snapshot when the failure could have left state behind.

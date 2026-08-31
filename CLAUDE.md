@@ -10,7 +10,7 @@ Extended docs live in `docs/` (installation, laravel-deployment, troubleshooting
 
 ## Key Variables (install.sh)
 
-- `PHP_VERSION` — hardcoded to `"8.3"`
+- `PHP_VERSION` — prompted: OS default (`OS_PHP_VERSION`, detected via `apt-cache depends php`, fallback `8.3`) or a newer release (8.4, 8.5) installed from `ppa:ondrej/php`
 - `SYSTEM_USER` — prompted, defaults to `"web"`; owns `/home/web/www/` (`releases/`, `shared/`, `current` symlink)
 - `DOMAIN_NAME` — optional; enables Nginx server_name and SSL flow
 - `DB_TYPE` — `"mysql"` or `"postgresql"`
@@ -37,6 +37,8 @@ Full manual test plan (fresh install, retrofit from 1.4.0, release-flip/OPcache 
 
 ## Gotchas
 
+- PHP packages are installed with explicit version names (`php${PHP_VERSION}-fpm`, `-mysql`, …), never the unversioned meta-packages — with the ondrej PPA present, `php-fpm` would pull the newest version instead of the selected one. `php-json`/`php-tokenizer` are intentionally absent (JSON is core since 8.0; tokenizer ships in `phpX.Y-common`)
+- `ppa:ondrej/php` is added only when `php${PHP_VERSION}-fpm` has no apt candidate (Step 1); WordPress imagick prefers `php${PHP_VERSION}-imagick`, falling back to `php-imagick` (Ubuntu builds imagick only for the default PHP)
 - PHP drop-in config written to `/etc/php/<version>/fpm/conf.d/99-laravel.ini` (memory_limit=256M, upload=64M, OPcache enabled, timezone=UTC)
 - WordPress installs get an additional `/etc/php/<version>/fpm/conf.d/99-wordpress.ini` (upload=128M, max_input_vars=3000)
 - Wildcard SSL uses manual DNS-01 challenge — certbot pauses twice for TXT records; cannot auto-renew
