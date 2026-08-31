@@ -77,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - PHP version selection during install: choose the Ubuntu default (8.3) or a newer release (8.4, 8.5); `ppa:ondrej/php` is added automatically only when the chosen version is not in the OS repositories
+- When SSL is skipped but a domain was provided, the post-install summary shows `SSL: Not configured` and prints the exact commands to add it later (snap-install certbot + `certbot --nginx`)
+- Warning when declining SSL on an HSTS-preloaded TLD (`.dev`, `.app`, `.page`): browsers force HTTPS on those domains, so the site will not open in a browser until SSL is added
 
 ### Changed
 - PHP packages are installed with explicit version names (`php8.4-fpm`, `php8.4-mysql`, …) instead of the unversioned meta-packages, so the selected version stays deterministic even with extra repositories present

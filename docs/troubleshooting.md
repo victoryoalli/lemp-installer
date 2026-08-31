@@ -115,6 +115,20 @@ FLUSH PRIVILEGES;
 
 Check that `.env` (in `~/www/shared/.env`) matches the database name, user, and password you created.
 
+## Site Won't Open in the Browser, but `curl http://...` Works
+
+If the server answers `curl http://yourdomain` with `200` but the browser shows "This site can't be reached", the cause is almost always a missing SSL setup on an **HSTS-preloaded TLD**. Entire TLDs like `.dev`, `.app`, and `.page` are hardcoded into Chrome, Firefox, and Safari as HTTPS-only — the browser never even attempts plain HTTP.
+
+Fix it by adding SSL (certbot is only installed if you answered yes to SSL during install):
+
+```bash
+sudo snap install --classic certbot
+sudo ln -sf /snap/bin/certbot /usr/bin/certbot
+sudo certbot --nginx -d yourdomain.dev
+```
+
+`certbot --nginx` edits the site config, adds the certificate, and sets up the HTTP→HTTPS redirect automatically.
+
 ## Wildcard SSL Renewal
 
 Wildcard certificates obtained via the manual DNS-01 challenge **cannot renew automatically**. Every ~90 days:

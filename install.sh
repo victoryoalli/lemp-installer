@@ -918,6 +918,14 @@ if [ -n "$DOMAIN_NAME" ]; then
             SSL_TYPE="standard"
             print_info "Selected: Standard certificate (${DOMAIN_NAME})"
         fi
+    else
+        # Browsers force HTTPS on HSTS-preloaded TLDs — plain HTTP will not open
+        case "$DOMAIN_NAME" in
+            *.dev|*.app|*.page)
+                print_warning "The .${DOMAIN_NAME##*.} TLD is HSTS-preloaded: browsers force HTTPS and refuse plain HTTP."
+                print_warning "The site will not open in a browser until SSL is added (instructions shown after install)."
+                ;;
+        esac
     fi
 fi
 
@@ -1604,10 +1612,24 @@ if [ -n "$DOMAIN_NAME" ]; then
         else
             echo "SSL:                  Enabled (https://$DOMAIN_NAME)"
         fi
+    else
+        echo "SSL:                  Not configured"
     fi
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
+if [ -n "$DOMAIN_NAME" ] && [ "$INSTALL_SSL" = false ]; then
+    print_warning "SSL is not configured. To add it later:"
+    echo "  sudo snap install --classic certbot"
+    echo "  sudo ln -sf /snap/bin/certbot /usr/bin/certbot"
+    echo "  sudo certbot --nginx -d $DOMAIN_NAME"
+    case "$DOMAIN_NAME" in
+        *.dev|*.app|*.page)
+            print_warning "Browsers force HTTPS on the .${DOMAIN_NAME##*.} TLD — the site will NOT open in a browser until SSL is added."
+            ;;
+    esac
+    echo ""
+fi
 print_info "Next steps for Laravel deployment (releases/shared layout):"
 echo ""
 echo "  1. Switch to web user (always deploy as $SYSTEM_USER, never as root):"
