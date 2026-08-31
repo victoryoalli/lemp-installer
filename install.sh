@@ -646,6 +646,8 @@ fix_permissions() {
     for conf in /etc/nginx/sites-available/*; do
         [ -f "$conf" ] || continue
         [ "$(basename "$conf")" = "default" ] && continue
+        # Skip backups from previous runs of this mode
+        case "$conf" in *.bak.*) continue ;; esac
         # Only touch configs serving this user's tree
         grep -q "root /home/${system_user}/" "$conf" || continue
         local bak
